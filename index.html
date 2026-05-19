@@ -4,6 +4,8 @@
 
 <h1>Bottle Sorter</h1>
 
+<button onclick="connectMicrobit()">Connect micro:bit</button>
+
 <button onclick="init()">Start Camera</button>
 
 <div id="webcam-container"></div>
@@ -17,7 +19,31 @@
 const URL="./my_model/";
 
 let model, webcam, labelContainer, maxPredictions;
+let port;
+let writer;
 
+async function connectMicrobit(){
+
+port = await navigator.serial.requestPort();
+
+await port.open({ baudRate:115200 });
+
+writer = port.writable.getWriter();
+
+}
+
+async function sendToMicrobit(message){
+
+if(writer){
+
+const data=
+new TextEncoder().encode(message+"\n");
+
+await writer.write(data);
+
+}
+
+}
 async function init(){
 
 const modelURL=URL+"model.json";
@@ -82,7 +108,7 @@ prediction[0].className=="Plastic Bottle"
 prediction[0].probability>.85
 ){
 
-console.log("BOTTLE");
+sendToMicrobit("BOTTLE");
 
 }
 
@@ -93,7 +119,7 @@ prediction[1].className=="Chip Packet"
 prediction[1].probability>.85
 ){
 
-console.log("CHIPS");
+sendToMicrobit("CHIPS");
 
 }
 
