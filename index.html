@@ -75,6 +75,28 @@ prediction[i].className+
 
 }
 
+// Plastic bottle detected
+if(
+prediction[0].className=="Plastic Bottle"
+&&
+prediction[0].probability>.85
+){
+
+console.log("BOTTLE");
+
+}
+
+// Chip packet detected
+if(
+prediction[1].className=="Chip Packet"
+&&
+prediction[1].probability>.85
+){
+
+console.log("CHIPS");
+
+}
+
 }
 
 </script>
