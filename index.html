@@ -25,6 +25,9 @@ const URL="./my_model/";
 let model, webcam, labelContainer, maxPredictions;
 let port;
 let writer;
+let detectedClass = "";
+let detectionStartTime = 0;
+let sortingLocked = false;
 
 async function connectMicrobit(){
 
