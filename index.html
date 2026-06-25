@@ -97,6 +97,89 @@ window.requestAnimationFrame(loop);
 
 async function predict(){
 
+    const prediction = await model.predict(webcam.canvas);
+    const now = Date.now();
+
+    // Slow the percentage display so it is easier to read
+    if(now - lastDisplayUpdate > 300){
+
+        for(let i = 0; i < maxPredictions; i++){
+
+            labelContainer.childNodes[i].innerHTML =
+                prediction[i].className +
+                ": " +
+                (prediction[i].probability * 100).toFixed(1) +
+                "%";
+        }
+
+        lastDisplayUpdate = now;
+    }
+
+    // Find the class with the highest percentage
+    const bestPrediction = prediction.reduce(
+        (best, current) =>
+            current.probability > best.probability
+                ? current
+                : best
+    );
+
+    // Remove extra spaces and ignore capitalisation
+    const currentClass =
+        bestPrediction.className.trim().toUpperCase();
+
+    const confidence = bestPrediction.probability;
+
+    // Do nothing while the servo is already sorting
+    if(sortingLocked){
+        return;
+    }
+
+    // Only accept recognised objects above 90%
+    const recognisedObject =
+        currentClass === "PLASTIC BOTTLE" ||
+        currentClass === "CHIP PACKET";
+
+    if(confidence < 0.90 || !recognisedObject){
+
+        detectedClass = "";
+        detectionStartTime = 0;
+        return;
+    }
+
+    // Begin timing a new detection
+    if(currentClass !== detectedClass){
+
+        detectedClass = currentClass;
+        detectionStartTime = now;
+        return;
+    }
+
+    // The same object must remain above 90% for one second
+    if(now - detectionStartTime < 1000){
+        return;
+    }
+
+    sortingLocked = true;
+
+    if(currentClass === "PLASTIC BOTTLE"){
+
+        await sendToMicrobit("BOTTLE");
+
+    } else if(currentClass === "CHIP PACKET"){
+
+        await sendToMicrobit("CHIPS");
+    }
+
+    // Wait before allowing another sorting action
+    setTimeout(function(){
+
+        sortingLocked = false;
+        detectedClass = "";
+        detectionStartTime = 0;
+
+    }, 4000);
+}
+
 const prediction=
 await model.predict(webcam.canvas);
 
