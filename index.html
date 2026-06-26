@@ -180,42 +180,6 @@ async function predict(){
     }, 4000);
 }
 
-const prediction=
-await model.predict(webcam.canvas);
-
-for(let i=0;i<maxPredictions;i++){
-
-labelContainer.childNodes[i].innerHTML=
-prediction[i].className+
-": "+
-(prediction[i].probability*100).toFixed(1)+"%";
-
-}
-
-// Plastic bottle detected
-if(
-prediction[0].className=="Plastic Bottle"
-&&
-prediction[0].probability>.85
-){
-
-sendToMicrobit("BOTTLE");
-
-}
-
-// Chip packet detected
-if(
-prediction[1].className=="Chip Packet"
-&&
-prediction[1].probability>.85
-){
-
-sendToMicrobit("CHIPS");
-
-}
-
-}
-
 </script>
 
 </body>
