@@ -139,7 +139,7 @@ async function predict(){
         currentClass === "PLASTIC BOTTLE" ||
         currentClass === "CHIP PACKET";
 
-    if(confidence < 0.97 || !recognisedObject){
+    if(confidence < 0.98|| !recognisedObject){
         
         detectedClass = "";
         detectionStartTime = 0;
