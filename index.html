@@ -134,13 +134,13 @@ async function predict(){
         return;
     }
 
-    // Only accept recognised objects above 90%
+    // Only accept recognised objects above 97%
     const recognisedObject =
         currentClass === "PLASTIC BOTTLE" ||
         currentClass === "CHIP PACKET";
 
-    if(confidence < 0.90 || !recognisedObject){
-
+    if(confidence < 0.97 || !recognisedObject){
+        
         detectedClass = "";
         detectionStartTime = 0;
         return;
