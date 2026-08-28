@@ -8,9 +8,13 @@
 
 <button onclick="init()">Start Camera</button>
 
+<button onclick="calibrateBackground()">Calibrate Empty Background</button>
+
 <button onclick="sendToMicrobit('BOTTLE')">Test Recycling</button>
 
 <button onclick="sendToMicrobit('CHIPS')">Test Rubbish</button>
+
+<div id="status">Status: Not calibrated</div>
 
 <div id="webcam-container"></div>
 <div id="label-container"></div>
@@ -20,7 +24,7 @@
 
 <script>
 
-const URL="./my_model/";
+const URL = "./my_model/";
 
 let model, webcam, labelContainer, maxPredictions;
 let port;
@@ -30,68 +34,132 @@ let detectionStartTime = 0;
 let sortingLocked = false;
 let lastDisplayUpdate = 0;
 
+// AI must be this confident before sorting
+let confidenceThreshold = 0.98;
+
+// Background calibration
+let backgroundImageData = null;
+let backgroundThreshold = 18;
+let compareCanvas = document.createElement("canvas");
+let compareContext = compareCanvas.getContext("2d");
+
 async function connectMicrobit(){
 
-port = await navigator.serial.requestPort();
+    port = await navigator.serial.requestPort();
 
-await port.open({ baudRate:115200 });
+    await port.open({ baudRate:115200 });
 
-writer = port.writable.getWriter();
+    writer = port.writable.getWriter();
 
 }
 
 async function sendToMicrobit(message){
 
-if(writer){
+    if(writer){
 
-const data=
-new TextEncoder().encode(message+"\n");
+        const data = new TextEncoder().encode(message + "\n");
 
-await writer.write(data);
+        await writer.write(data);
+
+    }
 
 }
 
-}
 async function init(){
 
-const modelURL=URL+"model.json";
-const metadataURL=URL+"metadata.json";
+    const modelURL = URL + "model.json";
+    const metadataURL = URL + "metadata.json";
 
-model=await tmImage.load(modelURL,metadataURL);
+    model = await tmImage.load(modelURL, metadataURL);
 
-maxPredictions=model.getTotalClasses();
+    maxPredictions = model.getTotalClasses();
 
-webcam=new tmImage.Webcam(300,300,true);
+    webcam = new tmImage.Webcam(300, 300, true);
 
-await webcam.setup();
-await webcam.play();
+    await webcam.setup();
+    await webcam.play();
 
-window.requestAnimationFrame(loop);
+    window.requestAnimationFrame(loop);
 
-document
-.getElementById("webcam-container")
-.appendChild(webcam.canvas);
+    document.getElementById("webcam-container").innerHTML = "";
+    document.getElementById("webcam-container").appendChild(webcam.canvas);
 
-labelContainer=
-document.getElementById("label-container");
+    labelContainer = document.getElementById("label-container");
+    labelContainer.innerHTML = "";
 
-for(let i=0;i<maxPredictions;i++){
+    for(let i = 0; i < maxPredictions; i++){
 
-labelContainer.appendChild(
-document.createElement("div")
-);
+        labelContainer.appendChild(document.createElement("div"));
+
+    }
+
+    document.getElementById("status").innerHTML =
+        "Status: Camera started. Point at empty background, then press Calibrate Empty Background.";
 
 }
+
+function calibrateBackground(){
+
+    if(!webcam){
+
+        alert("Start the camera first.");
+        return;
+
+    }
+
+    compareCanvas.width = webcam.canvas.width;
+    compareCanvas.height = webcam.canvas.height;
+
+    compareContext.drawImage(webcam.canvas, 0, 0);
+
+    backgroundImageData =
+        compareContext.getImageData(0, 0, compareCanvas.width, compareCanvas.height);
+
+    document.getElementById("status").innerHTML =
+        "Status: Empty background calibrated.";
+
+}
+
+function getBackgroundDifference(){
+
+    if(!backgroundImageData || !webcam){
+        return 999;
+    }
+
+    compareContext.drawImage(webcam.canvas, 0, 0);
+
+    const currentImageData =
+        compareContext.getImageData(0, 0, compareCanvas.width, compareCanvas.height);
+
+    const current = currentImageData.data;
+    const background = backgroundImageData.data;
+
+    let totalDifference = 0;
+    let count = 0;
+
+    // Check every 10th pixel so it runs faster
+    for(let i = 0; i < current.length; i += 40){
+
+        const redDifference = Math.abs(current[i] - background[i]);
+        const greenDifference = Math.abs(current[i + 1] - background[i + 1]);
+        const blueDifference = Math.abs(current[i + 2] - background[i + 2]);
+
+        totalDifference += (redDifference + greenDifference + blueDifference) / 3;
+        count++;
+
+    }
+
+    return totalDifference / count;
 
 }
 
 async function loop(){
 
-webcam.update();
+    webcam.update();
 
-await predict();
+    await predict();
 
-window.requestAnimationFrame(loop);
+    window.requestAnimationFrame(loop);
 
 }
 
@@ -100,7 +168,6 @@ async function predict(){
     const prediction = await model.predict(webcam.canvas);
     const now = Date.now();
 
-    // Slow the percentage display so it is easier to read
     if(now - lastDisplayUpdate > 300){
 
         for(let i = 0; i < maxPredictions; i++){
@@ -110,12 +177,13 @@ async function predict(){
                 ": " +
                 (prediction[i].probability * 100).toFixed(1) +
                 "%";
+
         }
 
         lastDisplayUpdate = now;
+
     }
 
-    // Find the class with the highest percentage
     const bestPrediction = prediction.reduce(
         (best, current) =>
             current.probability > best.probability
@@ -123,38 +191,59 @@ async function predict(){
                 : best
     );
 
-    // Remove extra spaces and ignore capitalisation
     const currentClass =
         bestPrediction.className.trim().toUpperCase();
 
     const confidence = bestPrediction.probability;
 
-    // Do nothing while the servo is already sorting
     if(sortingLocked){
         return;
     }
 
-    // Only accept recognised objects above 97%
+    // Background safety check
+    if(backgroundImageData){
+
+        const difference = getBackgroundDifference();
+
+        if(difference < backgroundThreshold){
+
+            document.getElementById("status").innerHTML =
+                "Status: Empty background detected. Sorting blocked.";
+
+            detectedClass = "";
+            detectionStartTime = 0;
+            return;
+
+        } else {
+
+            document.getElementById("status").innerHTML =
+                "Status: Object detected. AI sorting active.";
+
+        }
+
+    }
+
     const recognisedObject =
         currentClass === "PLASTIC BOTTLE" ||
         currentClass === "CHIP PACKET";
 
-    if(confidence < 0.98|| !recognisedObject){
-        
+    if(confidence < confidenceThreshold || !recognisedObject){
+
         detectedClass = "";
         detectionStartTime = 0;
         return;
+
     }
 
-    // Begin timing a new detection
     if(currentClass !== detectedClass){
 
         detectedClass = currentClass;
         detectionStartTime = now;
         return;
+
     }
 
-    // The same object must remain above 90% for one second
+    // The same object must stay detected for one second
     if(now - detectionStartTime < 1000){
         return;
     }
@@ -168,9 +257,9 @@ async function predict(){
     } else if(currentClass === "CHIP PACKET"){
 
         await sendToMicrobit("CHIPS");
+
     }
 
-    // Wait before allowing another sorting action
     setTimeout(function(){
 
         sortingLocked = false;
@@ -178,6 +267,7 @@ async function predict(){
         detectionStartTime = 0;
 
     }, 4000);
+
 }
 
 </script>
