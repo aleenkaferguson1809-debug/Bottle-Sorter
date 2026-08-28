@@ -5,14 +5,10 @@
 <h1>Bottle Sorter</h1>
 
 <button onclick="connectMicrobit()">Connect micro:bit</button>
-
 <button onclick="init()">Start Camera</button>
-
 <button onclick="calibrateBackground()">Calibrate Empty Background</button>
-
-<button onclick="sendToMicrobit('BOTTLE')">Test Recycling</button>
-
-<button onclick="sendToMicrobit('CHIPS')">Test Rubbish</button>
+<button onclick="manualSort('BOTTLE')">Test Recycling</button>
+<button onclick="manualSort('CHIPS')">Test Rubbish</button>
 
 <div id="status">Status: Not calibrated</div>
 
@@ -29,10 +25,12 @@ const URL = "./my_model/";
 let model, webcam, labelContainer, maxPredictions;
 let port;
 let writer;
+
 let detectedClass = "";
 let detectionStartTime = 0;
 let sortingLocked = false;
 let lastDisplayUpdate = 0;
+let loopRunning = false;
 
 // AI must be this confident before sorting
 let confidenceThreshold = 0.98;
@@ -47,9 +45,12 @@ async function connectMicrobit(){
 
     port = await navigator.serial.requestPort();
 
-    await port.open({ baudRate:115200 });
+    await port.open({ baudRate: 115200 });
 
     writer = port.writable.getWriter();
+
+    document.getElementById("status").innerHTML =
+        "Status: micro:bit connected.";
 
 }
 
@@ -61,7 +62,31 @@ async function sendToMicrobit(message){
 
         await writer.write(data);
 
+    } else {
+
+        alert("Connect the micro:bit first.");
+
     }
+
+}
+
+async function manualSort(message){
+
+    if(sortingLocked){
+        return;
+    }
+
+    sortingLocked = true;
+
+    await sendToMicrobit(message);
+
+    setTimeout(function(){
+
+        sortingLocked = false;
+        detectedClass = "";
+        detectionStartTime = 0;
+
+    }, 4000);
 
 }
 
@@ -79,8 +104,6 @@ async function init(){
     await webcam.setup();
     await webcam.play();
 
-    window.requestAnimationFrame(loop);
-
     document.getElementById("webcam-container").innerHTML = "";
     document.getElementById("webcam-container").appendChild(webcam.canvas);
 
@@ -94,7 +117,14 @@ async function init(){
     }
 
     document.getElementById("status").innerHTML =
-        "Status: Camera started. Point at empty background, then press Calibrate Empty Background.";
+        "Status: Camera started. Point at the empty background, then press Calibrate Empty Background.";
+
+    if(!loopRunning){
+
+        loopRunning = true;
+        window.requestAnimationFrame(loop);
+
+    }
 
 }
 
@@ -155,15 +185,23 @@ function getBackgroundDifference(){
 
 async function loop(){
 
-    webcam.update();
+    if(webcam){
 
-    await predict();
+        webcam.update();
+
+        await predict();
+
+    }
 
     window.requestAnimationFrame(loop);
 
 }
 
 async function predict(){
+
+    if(!model || !webcam || !labelContainer){
+        return;
+    }
 
     const prediction = await model.predict(webcam.canvas);
     const now = Date.now();
