@@ -10,7 +10,7 @@
 <button onclick="manualSort('BOTTLE')">Test Recycling</button>
 <button onclick="manualSort('CHIPS')">Test Rubbish</button>
 
-<div id="status">Status: Not calibrated</div>
+<div id="status">Status: Not started</div>
 
 <div id="webcam-container"></div>
 <div id="label-container"></div>
@@ -32,7 +32,7 @@ let sortingLocked = false;
 let lastDisplayUpdate = 0;
 let loopRunning = false;
 
-// AI must be this confident before sorting
+// AI confidence level
 let confidenceThreshold = 0.98;
 
 // Background calibration
@@ -70,6 +70,7 @@ async function sendToMicrobit(message){
 
 }
 
+// Manual test buttons
 async function manualSort(message){
 
     if(sortingLocked){
@@ -117,7 +118,12 @@ async function init(){
     }
 
     document.getElementById("status").innerHTML =
-        "Status: Camera started. Point at the empty background, then press Calibrate Empty Background.";
+        "Status: Camera started. Auto-calibrating empty background...";
+
+    // Auto-calibrate when camera starts
+    setTimeout(function(){
+        autoCalibrateBackground();
+    }, 1500);
 
     if(!loopRunning){
 
@@ -128,6 +134,7 @@ async function init(){
 
 }
 
+// Manual calibration button
 function calibrateBackground(){
 
     if(!webcam){
@@ -146,7 +153,27 @@ function calibrateBackground(){
         compareContext.getImageData(0, 0, compareCanvas.width, compareCanvas.height);
 
     document.getElementById("status").innerHTML =
-        "Status: Empty background calibrated.";
+        "Status: Empty background manually calibrated.";
+
+}
+
+// Automatic calibration
+function autoCalibrateBackground(){
+
+    if(!webcam){
+        return;
+    }
+
+    compareCanvas.width = webcam.canvas.width;
+    compareCanvas.height = webcam.canvas.height;
+
+    compareContext.drawImage(webcam.canvas, 0, 0);
+
+    backgroundImageData =
+        compareContext.getImageData(0, 0, compareCanvas.width, compareCanvas.height);
+
+    document.getElementById("status").innerHTML =
+        "Status: Background auto-calibrated. Ready for item.";
 
 }
 
@@ -206,6 +233,7 @@ async function predict(){
     const prediction = await model.predict(webcam.canvas);
     const now = Date.now();
 
+    // Show AI percentages
     if(now - lastDisplayUpdate > 300){
 
         for(let i = 0; i < maxPredictions; i++){
@@ -273,6 +301,7 @@ async function predict(){
 
     }
 
+    // Start timing the detected object
     if(currentClass !== detectedClass){
 
         detectedClass = currentClass;
@@ -281,7 +310,7 @@ async function predict(){
 
     }
 
-    // The same object must stay detected for one second
+    // Object must stay detected for 1 second
     if(now - detectionStartTime < 1000){
         return;
     }
@@ -298,17 +327,20 @@ async function predict(){
 
     }
 
+    // Wait for item to fall away, then auto-calibrate again
     setTimeout(function(){
 
         sortingLocked = false;
         detectedClass = "";
         detectionStartTime = 0;
 
-    }, 4000);
+        autoCalibrateBackground();
+
+    }, 5000);
 
 }
 
 </script>
 
 </body>
-</html>
+</html>FcaF
