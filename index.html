@@ -10,7 +10,7 @@
 <button onclick="manualSort('BOTTLE')">Test Recycling</button>
 <button onclick="manualSort('CHIPS')">Test Rubbish</button>
 
-<div id="status">Status: Not started</div>
+<div id="status">Status: Not calibrated</div>
 
 <div id="webcam-container"></div>
 <div id="label-container"></div>
@@ -35,7 +35,7 @@ let loopRunning = false;
 // AI confidence level
 let confidenceThreshold = 0.98;
 
-// Background calibration
+// Manual background calibration
 let backgroundImageData = null;
 let backgroundThreshold = 18;
 let compareCanvas = document.createElement("canvas");
@@ -70,7 +70,6 @@ async function sendToMicrobit(message){
 
 }
 
-// Manual test buttons
 async function manualSort(message){
 
     if(sortingLocked){
@@ -118,12 +117,7 @@ async function init(){
     }
 
     document.getElementById("status").innerHTML =
-        "Status: Camera started. Auto-calibrating empty background...";
-
-    // Auto-calibrate when camera starts
-    setTimeout(function(){
-        autoCalibrateBackground();
-    }, 1500);
+        "Status: Camera started. Point at empty background, then press Calibrate Empty Background.";
 
     if(!loopRunning){
 
@@ -134,7 +128,6 @@ async function init(){
 
 }
 
-// Manual calibration button
 function calibrateBackground(){
 
     if(!webcam){
@@ -153,27 +146,7 @@ function calibrateBackground(){
         compareContext.getImageData(0, 0, compareCanvas.width, compareCanvas.height);
 
     document.getElementById("status").innerHTML =
-        "Status: Empty background manually calibrated.";
-
-}
-
-// Automatic calibration
-function autoCalibrateBackground(){
-
-    if(!webcam){
-        return;
-    }
-
-    compareCanvas.width = webcam.canvas.width;
-    compareCanvas.height = webcam.canvas.height;
-
-    compareContext.drawImage(webcam.canvas, 0, 0);
-
-    backgroundImageData =
-        compareContext.getImageData(0, 0, compareCanvas.width, compareCanvas.height);
-
-    document.getElementById("status").innerHTML =
-        "Status: Background auto-calibrated. Ready for item.";
+        "Status: Empty background calibrated.";
 
 }
 
@@ -233,7 +206,6 @@ async function predict(){
     const prediction = await model.predict(webcam.canvas);
     const now = Date.now();
 
-    // Show AI percentages
     if(now - lastDisplayUpdate > 300){
 
         for(let i = 0; i < maxPredictions; i++){
@@ -301,7 +273,6 @@ async function predict(){
 
     }
 
-    // Start timing the detected object
     if(currentClass !== detectedClass){
 
         detectedClass = currentClass;
@@ -327,20 +298,17 @@ async function predict(){
 
     }
 
-    // Wait for item to fall away, then auto-calibrate again
     setTimeout(function(){
 
         sortingLocked = false;
         detectedClass = "";
         detectionStartTime = 0;
 
-        autoCalibrateBackground();
-
-    }, 5000);
+    }, 4000);
 
 }
 
 </script>
 
 </body>
-</html>FcaF
+</html>
